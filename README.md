@@ -90,33 +90,28 @@ identifies a person beyond the name they picked themselves.
 ### Keeping the history permanently
 
 Rooms and history live in memory, so on Render's free plan they reset whenever
-the site sits idle for ~15 minutes. To keep the history, point it at a free
-[Supabase](https://supabase.com) project:
+the site sits idle for ~15 minutes. To keep the history, set one environment
+variable:
 
-1. Create a project, then in its **SQL Editor** run:
+```
+DATABASE_URL = postgresql://user:password@host/dbname?sslmode=require
+```
 
-   ```sql
-   create table arcade_events (
-     id          bigserial primary key,
-     created_at  timestamptz default now(),
-     kind        text,
-     room        text,
-     game        text,
-     host        text,
-     players     jsonb,
-     winner      int,
-     reason      text,
-     seconds     int,
-     moves       int
-   );
-   alter table arcade_events enable row level security;
-   ```
+Any Postgres will do. The `arcade_events` table is created automatically the
+first time the server talks to the database — there is no SQL to run by hand.
 
-2. In Render, set `SUPABASE_URL` to the project URL and `SUPABASE_KEY` to its
-   **service role** key.
+[Neon](https://neon.com) is the recommended host for a site like this: its free
+tier sleeps after five minutes but **wakes itself on the next query**, so it
+never needs to be restored by hand. Supabase's free tier works too, but it
+pauses after seven days of low activity and then stays unavailable until you
+unpause it in their dashboard — awkward for a site that can sit quiet for a week
+between games.
 
-The dashboard says at the top which of the two it is currently using, so you can
-tell at a glance whether anything is being saved.
+You can tell what it is doing at a glance in two places:
+
+- the dashboard header says either *"Saved permanently"* or warns that nothing
+  is being saved;
+- the server prints a `History:` line when it starts.
 
 ## How it fits together
 

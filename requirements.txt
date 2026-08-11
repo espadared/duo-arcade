@@ -1,1 +1,5 @@
-# No extra packages needed - the arcade uses only Python's standard library.
+# The arcade itself uses only Python's standard library.
+# This one package is only for saving the owner dashboard's history to a
+# database; without it (and without DATABASE_URL) everything still runs, the
+# history just lives in memory.
+psycopg[binary]>=3.1

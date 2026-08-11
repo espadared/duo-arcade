@@ -5,8 +5,9 @@ entirely when running on a host, and uses the key "localtest" on your own
 computer.
 
 Events are kept in memory so the page works with no setup at all, and are also
-written to Supabase when SUPABASE_URL and SUPABASE_KEY are set, which is what
-makes the history survive the server going to sleep.
+written to a Postgres database when DATABASE_URL is set, which is what makes the
+history survive the server going to sleep. Any Postgres host will do - Neon,
+Supabase, whatever - and the table is created automatically on first use.
 
 Only what players type is recorded - the name they chose, the game, and the
 result. No IP addresses, no device details, nothing that identifies a person
@@ -18,15 +19,34 @@ import json
 import os
 import secrets
 import threading
-import time
-import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 TABLE = "arcade_events"
+
+# One statement per entry: psycopg sends these over a protocol that refuses
+# several commands in a single execute().
+SCHEMA = (
+    f"""create table if not exists {TABLE} (
+          id          bigserial primary key,
+          created_at  timestamptz not null default now(),
+          kind        text,
+          room        text,
+          game        text,
+          host        text,
+          players     jsonb,
+          winner      int,
+          reason      text,
+          seconds     int,
+          moves       int
+        )""",
+    f"create index if not exists {TABLE}_created_at_idx on {TABLE} (created_at desc)",
+)
+
+COLUMNS = ("created_at", "kind", "room", "game", "host", "players",
+           "winner", "reason", "seconds", "moves")
 
 # On a host the dashboard stays switched off until a real OWNER_KEY is set;
 # "localtest" only ever works on your own machine.
@@ -52,45 +72,86 @@ def record(kind, **fields):
     with _LOCK:
         EVENTS.insert(0, event)
         del EVENTS[EVENT_CAP:]
-    if SUPABASE_URL and SUPABASE_KEY:
+    if DATABASE_URL:
         threading.Thread(target=_push, args=(event,), daemon=True).start()
 
 
-def _supabase(path, data=None):
-    request = urllib.request.Request(
-        SUPABASE_URL + path,
-        data=json.dumps(data).encode() if data is not None else None,
-        headers={
-            "apikey": SUPABASE_KEY,
-            "Authorization": "Bearer " + SUPABASE_KEY,
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal",
-        },
-        method="POST" if data is not None else "GET",
-    )
-    with urllib.request.urlopen(request, timeout=10) as response:
-        body = response.read()
-    return json.loads(body) if body else None
+# --- storage ---------------------------------------------------------------
+
+_schema_ready = False
+_schema_lock = threading.Lock()
+
+
+def _connect():
+    """A fresh connection. psycopg is only imported here so the arcade still
+    runs on a machine that hasn't installed it."""
+    import psycopg
+    global _schema_ready
+    connection = psycopg.connect(DATABASE_URL, connect_timeout=15)
+    if not _schema_ready:
+        try:
+            with _schema_lock:
+                with connection.cursor() as cursor:
+                    for statement in SCHEMA:  # creates the table the first time only
+                        cursor.execute(statement)
+                connection.commit()
+                _schema_ready = True
+        except Exception:
+            connection.close()  # don't strand a connection on a failed set-up
+            raise
+    return connection
 
 
 def _push(event):
     try:
-        _supabase(f"/rest/v1/{TABLE}", event)
+        with _connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"insert into {TABLE} (created_at, kind, room, game, host, players,"
+                f" winner, reason, seconds, moves)"
+                f" values (%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)",
+                (event.get("created_at"), event.get("kind"), event.get("room"),
+                 event.get("game"), event.get("host"),
+                 json.dumps(event.get("players")) if event.get("players") else None,
+                 event.get("winner"), event.get("reason"),
+                 event.get("seconds"), event.get("moves")))
     except Exception:
-        pass  # the in-memory copy still has it
+        pass  # the in-memory copy still has it; analytics must never break play
 
 
 def _load():
     """Every event we can see, plus where it came from."""
-    if SUPABASE_URL and SUPABASE_KEY:
-        try:
-            rows = _supabase(f"/rest/v1/{TABLE}?select=*&order=created_at.desc&limit=3000")
-            return rows or [], "permanent"
-        except Exception:
-            with _LOCK:
-                return list(EVENTS), "memory-fallback"
-    with _LOCK:
-        return list(EVENTS), "memory-only"
+    if not DATABASE_URL:
+        with _LOCK:
+            return list(EVENTS), "memory-only"
+    try:
+        with _connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"select {', '.join(COLUMNS)} from {TABLE}"
+                f" order by created_at desc limit {EVENT_CAP}")
+            rows = cursor.fetchall()
+        events = []
+        for row in rows:
+            event = dict(zip(COLUMNS, row))
+            when = event.get("created_at")
+            if hasattr(when, "isoformat"):
+                event["created_at"] = when.isoformat()
+            events.append(event)
+        return events, "permanent"
+    except Exception:
+        with _LOCK:
+            return list(EVENTS), "memory-fallback"
+
+
+def storage_check():
+    """Used at start-up to say plainly whether saving is working."""
+    if not DATABASE_URL:
+        return False, "no DATABASE_URL set - history is kept in memory only"
+    try:
+        with _connect() as connection, connection.cursor() as cursor:
+            cursor.execute(f"select count(*) from {TABLE}")
+            return True, f"connected, {cursor.fetchone()[0]} events stored"
+    except Exception as problem:
+        return False, f"could not reach the database ({type(problem).__name__}: {problem})"
 
 
 # --- presentation ----------------------------------------------------------
@@ -218,11 +279,14 @@ td.num, th.num {{ text-align: right; }}
     if source == "memory-only":
         out.append('<div class="note" style="margin-top:14px">⚠️ <b>Nothing is being saved permanently yet.</b> '
                    'This page is showing only what has happened since the server last woke up — on the free plan '
-                   'that resets whenever the site sits idle for about 15 minutes. Set up a database to keep '
-                   'the history (see the README).</div>')
+                   'that resets whenever the site sits idle for about 15 minutes. Set <code>DATABASE_URL</code> '
+                   'to keep the history (see the README).</div>')
     elif source == "memory-fallback":
         out.append('<div class="note" style="margin-top:14px">⚠️ Could not reach the database just now — '
-                   'showing recent activity from memory instead.</div>')
+                   'showing recent activity from memory instead. Nothing is lost; it will catch up.</div>')
+    else:
+        out.append('<p class="muted small" style="margin-top:10px">✅ Saved permanently — '
+                   'this history survives the site going to sleep.</p>')
 
     # --- headline numbers
     out.append('<h2>At a glance</h2><div class="tiles">')

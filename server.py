@@ -475,7 +475,9 @@ def get_lan_ip():
 if __name__ == "__main__":
     threading.Thread(target=janitor, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    saving, detail = owner.storage_check()
     print(f"Two Player Arcade is running with {len(CATALOG)} games!")
+    print(f"  History: {'saved to database' if saving else 'MEMORY ONLY'} — {detail}")
     print(f"  On this computer:  http://localhost:{PORT}")
     print(f"  On another device (same WiFi):  http://{get_lan_ip()}:{PORT}")
     server.serve_forever()
