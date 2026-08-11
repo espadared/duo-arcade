@@ -80,6 +80,12 @@ def record(kind, **fields):
 
 _schema_ready = False
 _schema_lock = threading.Lock()
+_last_error = ""  # why saving last failed, so the dashboard can say so out loud
+
+
+def _remember_error(problem):
+    global _last_error
+    _last_error = f"{type(problem).__name__}: {problem}"[:300]
 
 
 def _connect():
@@ -114,8 +120,10 @@ def _push(event):
                  json.dumps(event.get("players")) if event.get("players") else None,
                  event.get("winner"), event.get("reason"),
                  event.get("seconds"), event.get("moves")))
-    except Exception:
-        pass  # the in-memory copy still has it; analytics must never break play
+    except Exception as problem:
+        # the in-memory copy still has it; analytics must never break play,
+        # but the dashboard should be able to say why nothing is being saved
+        _remember_error(problem)
 
 
 def _load():
@@ -137,7 +145,8 @@ def _load():
                 event["created_at"] = when.isoformat()
             events.append(event)
         return events, "permanent"
-    except Exception:
+    except Exception as problem:
+        _remember_error(problem)
         with _LOCK:
             return list(EVENTS), "memory-fallback"
 
@@ -151,7 +160,8 @@ def storage_check():
             cursor.execute(f"select count(*) from {TABLE}")
             return True, f"connected, {cursor.fetchone()[0]} events stored"
     except Exception as problem:
-        return False, f"could not reach the database ({type(problem).__name__}: {problem})"
+        _remember_error(problem)
+        return False, f"could not reach the database ({_last_error})"
 
 
 # --- presentation ----------------------------------------------------------
@@ -282,8 +292,10 @@ td.num, th.num {{ text-align: right; }}
                    'that resets whenever the site sits idle for about 15 minutes. Set <code>DATABASE_URL</code> '
                    'to keep the history (see the README).</div>')
     elif source == "memory-fallback":
-        out.append('<div class="note" style="margin-top:14px">⚠️ Could not reach the database just now — '
-                   'showing recent activity from memory instead. Nothing is lost; it will catch up.</div>')
+        out.append('<div class="note" style="margin-top:14px">⚠️ <b>Could not reach the database</b> — '
+                   'showing recent activity from memory instead.'
+                   + (f'<br><code style="font-size:.78rem">{_esc(_last_error)}</code>' if _last_error else "")
+                   + '</div>')
     else:
         out.append('<p class="muted small" style="margin-top:10px">✅ Saved permanently — '
                    'this history survives the site going to sleep.</p>')
