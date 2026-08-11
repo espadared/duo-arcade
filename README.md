@@ -1,5 +1,7 @@
 # Duo Arcade 🎮
 
+**Live at https://duo-arcade.onrender.com**
+
 A website for two people. One person picks a game and gets a room code plus a
 share link; their friend opens the link and they play, each on their own phone.
 When a game finishes they can rematch or pick a different game — **the room stays
