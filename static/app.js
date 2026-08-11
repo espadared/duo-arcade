@@ -11,6 +11,7 @@
     room: null, player: null, token: null, name: null,
     view: null, lastV: 0,
     sheet: null,          // the "enter your name" panel
+    rules: null,          // game key whose rules are on screen
     joinCode: '', joinInfo: null, joinError: '',
     homeError: '',
     ui: {}, uiKey: '',    // scratch space a game renderer keeps between redraws
@@ -373,7 +374,13 @@
     }
 
     return h('div', {},
-      h('div', { class: 'status ' + status.cls }, status.text),
+      h('div', { class: 'status ' + status.cls },
+        h('span', {}, status.text),
+        // always within reach, whatever the board's height
+        h('button', {
+          class: 'help', title: 'How to play', 'aria-label': 'How to play',
+          onclick: () => { S.rules = v.game; render(); },
+        }, '?')),
       board,
       v.state.over && gameOverBox(),
       !v.state.over && h('div', { class: 'center', style: { marginTop: '18px' } },
@@ -403,6 +410,22 @@
       theyWant && !youWant && h('div', { class: 'waitmark' }, `${v.names[1 - v.you]} wants a rematch!`));
   }
 
+  function rulesSheet() {
+    const game = gameByKey(S.rules);
+    const close = () => { S.rules = null; render(); };
+    return h('div', {
+      class: 'backdrop',
+      onclick: (e) => { if (e.target.classList.contains('backdrop')) close(); },
+    },
+      h('div', { class: 'sheet' },
+        h('div', { style: { fontSize: '2rem', lineHeight: '1' } }, game.emoji),
+        h('h2', { style: { marginTop: '8px' } }, `How to play ${game.name}`),
+        h('p', { class: 'rules' }, game.rules),
+        h('button', {
+          class: 'btn primary wide', style: { marginTop: '18px' }, onclick: close,
+        }, 'Got it')));
+  }
+
   function roomScreen() {
     const v = S.view;
     let body;
@@ -412,7 +435,8 @@
     return h('div', { class: 'wrap' },
       topbar(),
       v.phase !== 'waiting' && scorebar(),
-      body);
+      body,
+      S.rules && rulesSheet());
   }
 
   async function sendMove(move) {
