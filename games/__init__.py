@@ -17,14 +17,17 @@ and drop a matching renderer in static/games/.
 from . import (
     battleship,
     blackjack,
+    bridges,
     checkers,
     connect4,
+    crosswires,
     dots,
     gomoku,
     memory,
     reversi,
     rps,
     tictactoe,
+    wordladder,
     xiangqi,
 )
 
@@ -34,11 +37,14 @@ MODULES = [
     connect4,
     rps,
     memory,
+    wordladder,
     dots,
+    crosswires,
     gomoku,
     reversi,
     blackjack,
     battleship,
+    bridges,
     checkers,
     xiangqi,
 ]

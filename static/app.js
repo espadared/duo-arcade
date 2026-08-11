@@ -436,10 +436,25 @@
   // ---------- boot ----------
 
   function render() {
+    // A redraw throws away the DOM, so anything being typed into would lose the
+    // caret. Note what was focused and put it back afterwards.
+    const active = document.activeElement;
+    const keepId = active && active.id && active !== document.body ? active.id : null;
+    let caret = null;
+    try { caret = keepId ? active.selectionStart : null; } catch (err) { caret = null; }
+
     const screen = S.screen === 'room' && S.view ? roomScreen()
       : S.screen === 'join' ? joinScreen()
         : homeScreen();
     $app.replaceChildren(screen);
+
+    if (keepId) {
+      const again = document.getElementById(keepId);
+      if (again && again !== document.activeElement) {
+        again.focus();
+        try { if (caret !== null) again.setSelectionRange(caret, caret); } catch (err) { /* not a text field */ }
+      }
+    }
   }
 
   async function init() {

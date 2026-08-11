@@ -29,6 +29,18 @@ def candidates(key, state, p):
         if state["phase"] == "place":
             return [{"action": "random"}]
         return [{"action": "fire", "cell": i} for i in random.sample(range(100), 100)]
+    if key == "bridges":
+        return [{"cell": i} for i in random.sample(range(81), 81)]
+    if key == "crosswires":
+        gaps = list(GAMES[key].WIRES[p])
+        random.shuffle(gaps)
+        return [{"r": r, "c": c} for r, c in gaps]
+    if key == "wordladder":
+        # walk the real shortest route - this also proves every puzzle is solvable
+        mod = GAMES[key]
+        route = mod.shortest_path(state["ladders"][p][-1], state["target"])
+        assert route, "a word ladder puzzle was generated with no solution"
+        return [{"word": route[1]}] if len(route) > 1 else []
     if key in ("checkers", "xiangqi"):
         mod = GAMES[key]
         if key == "xiangqi":
