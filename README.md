@@ -66,10 +66,63 @@ build and start commands automatically. The free plan is enough.
 Rooms live in the server's memory and are forgotten after a day of silence, so
 there is no database to set up.
 
+## The owner dashboard
+
+There is a private page at `/owner?key=...` showing who has played, which games
+they pick, and — the useful one — how many people create a room but never get a
+second player.
+
+The key comes from the `OWNER_KEY` environment variable. Without one set, the
+page is switched off completely when running on a host; on your own computer the
+key is `localtest`, so:
+
+```bash
+open "http://localhost:8400/owner?key=localtest"
+```
+
+Any wrong key gets a plain `404` that doesn't admit the page exists, and the
+page is marked `noindex` so search engines skip it.
+
+Only what players type in is recorded: the name they chose, the game, the result
+and how long it took. No IP addresses, no device details, nothing that
+identifies a person beyond the name they picked themselves.
+
+### Keeping the history permanently
+
+Rooms and history live in memory, so on Render's free plan they reset whenever
+the site sits idle for ~15 minutes. To keep the history, point it at a free
+[Supabase](https://supabase.com) project:
+
+1. Create a project, then in its **SQL Editor** run:
+
+   ```sql
+   create table arcade_events (
+     id          bigserial primary key,
+     created_at  timestamptz default now(),
+     kind        text,
+     room        text,
+     game        text,
+     host        text,
+     players     jsonb,
+     winner      int,
+     reason      text,
+     seconds     int,
+     moves       int
+   );
+   alter table arcade_events enable row level security;
+   ```
+
+2. In Render, set `SUPABASE_URL` to the project URL and `SUPABASE_KEY` to its
+   **service role** key.
+
+The dashboard says at the top which of the two it is currently using, so you can
+tell at a glance whether anything is being saved.
+
 ## How it fits together
 
 ```
 server.py          the room engine: codes, invites, turns, rematches
+owner.py           the private dashboard and the activity it records
 games/             one file per game - the actual rules, server-side
 static/index.html  the page
 static/app.js      the shell: lobby, invites, scoreboard, polling

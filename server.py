@@ -22,6 +22,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+import owner
 from games import GAMES, CATALOG
 
 # Hosting services (like Render) tell us the port via the environment;
@@ -72,7 +73,20 @@ def start_game(room, key):
     room["phase"] = "playing"
     room["rematch"] = [False, False]
     room["round"] = room.get("round", 0) + 1
+    room["began"] = time.time()
+    room["moves"] = 0
     room["scores"].setdefault(key, [0, 0])
+    owner.record("game_started", room=room["code"], game=key, players=list(room["players"]))
+
+
+def close_out(room, reason):
+    """Note a game that stopped without being played to the end."""
+    if room.get("phase") != "playing" or not room.get("gs") or room["gs"].get("over"):
+        return
+    owner.record("game_ended", room=room["code"], game=room["game"],
+                 players=list(room["players"]), reason=reason,
+                 seconds=int(time.time() - room.get("began", time.time())),
+                 moves=room.get("moves", 0))
 
 
 def settle(room):
@@ -82,6 +96,10 @@ def settle(room):
         return
     gs["scored"] = True
     winner = gs.get("winner")
+    owner.record("game_ended", room=room["code"], game=room["game"],
+                 players=list(room["players"]), reason="finished", winner=winner,
+                 seconds=int(time.time() - room.get("began", time.time())),
+                 moves=room.get("moves", 0))
     if winner in (0, 1):
         room["scores"][room["game"]][winner] += 1
         room["wins"][winner] += 1
@@ -198,6 +216,8 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         if path == "/api/games":
             self.send_json({"games": CATALOG})
+        elif path == "/owner":
+            self.handle_owner(parse_qs(parsed.query).get("key", [""])[0])
         elif path == "/api/state":
             self.handle_state(parse_qs(parsed.query))
         elif path in ("/", "/index.html"):
@@ -236,6 +256,27 @@ class Handler(BaseHTTPRequestHandler):
             handler(body)
 
     # -- long polling --
+
+    def handle_owner(self, key):
+        if not owner.key_is_valid(key):
+            # say as little as possible to anyone poking around
+            self.send_html("<h1>Not found</h1>", 404)
+            return
+        with LOCK:
+            live = [{"code": r["code"], "players": list(r["players"]),
+                     "phase": r["phase"], "game": r.get("game")}
+                    for r in ROOMS.values()]
+        self.send_html(owner.build_page(live, CATALOG))
+
+    def send_html(self, text, status=200):
+        body = text.encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Robots-Tag", "noindex, nofollow")
+        self.end_headers()
+        self.write_body(body)
 
     def handle_state(self, query):
         code = query.get("room", [""])[0].strip().upper()
@@ -295,6 +336,7 @@ class Handler(BaseHTTPRequestHandler):
             "created": time.time(),
             "touched": time.time(),
         }
+        owner.record("room_created", room=code, game=key, host=name)
         self.send_json({"room": code, "player": 0, "token": token, "name": name, "game": key})
 
     def handle_join(self, body):
@@ -313,6 +355,7 @@ class Handler(BaseHTTPRequestHandler):
         token = secrets.token_hex(8)
         room["players"].append(name)
         room["tokens"].append(token)
+        owner.record("partner_joined", room=code, game=room["game"], players=list(room["players"]))
         start_game(room, room["game"])
         bump(room)
         self.send_json({"room": code, "player": 1, "token": token, "name": name, "game": room["game"]})
@@ -342,6 +385,7 @@ class Handler(BaseHTTPRequestHandler):
     def handle_leave(self, body):
         room, player = self.authed_room(body)
         if room is not None and player is not None:
+            close_out(room, "left")
             del ROOMS[room["code"]]
             LOCK.notify_all()
         self.send_json({"ok": True})
@@ -361,6 +405,7 @@ class Handler(BaseHTTPRequestHandler):
         if error:
             self.send_json({"error": error, **view_for(room, player)}, 200)
             return
+        room["moves"] = room.get("moves", 0) + 1
         settle(room)
         bump(room)
         self.send_json(view_for(room, player))
@@ -378,6 +423,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(room["players"]) < 2:
             room["game"] = key  # still waiting - just change what we'll play
         else:
+            close_out(room, "switched")
             start_game(room, key)
         bump(room)
         self.send_json(view_for(room, player))
@@ -399,6 +445,7 @@ class Handler(BaseHTTPRequestHandler):
         if room is None or player is None:
             self.send_json({"error": "gone"}, 404)
             return
+        close_out(room, "switched")
         room["phase"] = "picking"
         room["rematch"] = [False, False]
         bump(room)
