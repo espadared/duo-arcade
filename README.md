@@ -7,7 +7,7 @@ share link; their friend opens the link and they play, each on their own phone.
 When a game finishes they can rematch or pick a different game — **the room stays
 the same, so the link only ever has to be shared once**.
 
-## The games (14 so far)
+## The games (12 so far)
 
 | Game | Difficulty | Roughly |
 | --- | --- | --- |
@@ -20,15 +20,22 @@ the same, so the link only ever has to be shared once**.
 | Crosswires | Medium | 10 min |
 | Gomoku (five in a row) | Medium | 10 min |
 | Reversi | Medium | 12 min |
-| Blackjack (head to head, best of 5) | Easy | 6 min |
-| Battleship | Medium | 12 min |
 | Bridges | Hard | 12 min |
-| Checkers | Hard | 15 min |
+| Poker | Hard | 20 min |
 | Chinese Chess (Xiangqi) | Hard | 25 min |
 
 Chinese Chess is the full game — cannons that jump to capture, blocked horses,
 elephants that can't cross the river, the flying-general rule, and real
 checkmate detection.
+
+**Poker** is heads-up no-limit Texas Hold'em with a dealer running the table.
+Both players start on 1,000 chips and the blinds climb every four hands, so the
+stacks get shallower in relative terms until somebody is all in before the flop
+and simply has to show. The hand evaluator scores all 21 five-card combinations
+from each player's seven cards, so ties, kickers and the ace-low straight all
+come out right. Chip conservation is asserted after every single action in the
+test suite — chips can never be created or lost, including when an uncalled
+raise has to be returned.
 
 **Bridges** is Hex: claim cells on a rhombus of hexagons and join your two
 opposite edges. Because the two goals cross, exactly one player always connects
@@ -126,8 +133,7 @@ static/games/      one file per game - how it's drawn and tapped
 
 The server holds the only real copy of every game, so nobody can cheat by
 editing the page, and each player is only ever sent what they're allowed to see
-(your opponent's Battleship fleet and their face-down Blackjack card never leave
-the server). Browsers stay on a long-poll connection, so moves show up on the
+(your opponent's hole cards in Poker never leave the server until showdown). Browsers stay on a long-poll connection, so moves show up on the
 other phone straight away rather than a second later.
 
 ## Adding another game

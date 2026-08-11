@@ -23,12 +23,16 @@ def candidates(key, state, p):
         return [{"t": t, "r": r, "c": c} for t in "hv" for r in range(6) for c in range(6)]
     if key == "rps":
         return [{"pick": random.choice(["rock", "paper", "scissors"])}]
-    if key == "blackjack":
-        return [{"action": random.choice(["hit", "stand"])}]
-    if key == "battleship":
-        if state["phase"] == "place":
-            return [{"action": "random"}]
-        return [{"action": "fire", "cell": i} for i in random.sample(range(100), 100)]
+    if key == "poker":
+        mod = GAMES[key]
+        owed = mod.to_call(state, p)
+        moves = [{"action": "fold"}]
+        moves += [{"action": "check"}] * 3 if owed == 0 else [{"action": "call"}] * 3
+        low, high = mod.min_raise_to(state, p), state["stacks"][p] + state["bets"][p]
+        if high > max(state["bets"]):
+            moves.append({"action": "raise", "to": random.choice([low, high, (low + high) // 2])})
+        random.shuffle(moves)
+        return moves
     if key == "bridges":
         return [{"cell": i} for i in random.sample(range(81), 81)]
     if key == "crosswires":
@@ -41,14 +45,16 @@ def candidates(key, state, p):
         route = mod.shortest_path(state["ladders"][p][-1], state["target"])
         assert route, "a word ladder puzzle was generated with no solution"
         return [{"word": route[1]}] if len(route) > 1 else []
-    if key in ("checkers", "xiangqi"):
-        mod = GAMES[key]
-        if key == "xiangqi":
-            moves = state["legal"]
-            return [{"from": int(f), "to": t} for f, ts in moves.items() for t in ts]
-        moves = mod.legal_moves(state, p)
-        return [{"from": f, "to": m["to"]} for f, ms in moves.items() for m in ms]
+    if key == "xiangqi":
+        return [{"from": int(f), "to": t} for f, ts in state["legal"].items() for t in ts]
     return []
+
+
+def invariants(key, state):
+    """Rules that must hold after every single move, not just at the end."""
+    if key == "poker":
+        total = sum(state["stacks"]) + state["pot"] + sum(state["bets"])
+        assert total == 2 * GAMES[key].START_STACK, f"chips leaked: {total}"
 
 random.seed(7)
 for key, mod in GAMES.items():
@@ -77,6 +83,7 @@ for key, mod in GAMES.items():
             if not moved:
                 print(f"  !! {key}: stuck after {steps} moves, turn={turn}")
                 break
+            invariants(key, state)
             for p in (0, 1):
                 json.dumps(mod.view(state, p))  # must be JSON-safe
         flag = "OK " if state["over"] else "STUCK"

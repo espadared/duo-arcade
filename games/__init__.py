@@ -15,15 +15,13 @@ and drop a matching renderer in static/games/.
 """
 
 from . import (
-    battleship,
-    blackjack,
     bridges,
-    checkers,
     connect4,
     crosswires,
     dots,
     gomoku,
     memory,
+    poker,
     reversi,
     rps,
     tictactoe,
@@ -42,10 +40,8 @@ MODULES = [
     crosswires,
     gomoku,
     reversi,
-    blackjack,
-    battleship,
     bridges,
-    checkers,
+    poker,
     xiangqi,
 ]
 
