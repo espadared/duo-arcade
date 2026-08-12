@@ -43,6 +43,8 @@ input { font: inherit; }
 .boot { padding: 80px 20px; text-align: center; color: var(--muted); }
 
 .wrap { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; }
+/* clearance for a game that pins a bar to the bottom of the screen */
+.wrap.has-bottom-bar { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
 
 /* ---------- typography ---------- */
 h1, h2, h3 { margin: 0; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; }

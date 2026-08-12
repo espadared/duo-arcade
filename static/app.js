@@ -432,7 +432,12 @@
     if (v.phase === 'waiting') body = waitingBody();
     else if (v.phase === 'picking') body = pickingBody();
     else body = playingBody();
-    return h('div', { class: 'wrap' },
+    // a game can pin something to the foot of the screen (poker's odds bar);
+    // reserve room for it so it never covers the buttons underneath
+    const renderer = RENDERERS[v.game];
+    const pinned = v.phase === 'playing' && renderer && renderer.bottomBar
+      && v.state && !v.state.over;
+    return h('div', { class: 'wrap' + (pinned ? ' has-bottom-bar' : '') },
       topbar(),
       v.phase !== 'waiting' && scorebar(),
       body,

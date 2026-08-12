@@ -30,8 +30,8 @@ HANDS_PER_LEVEL = 4
 BLIND_LEVELS = [(10, 20), (20, 40), (40, 80), (75, 150),
                 (150, 300), (300, 600), (600, 1200), (1000, 2000)]
 
-SHOWDOWN_SECONDS = 7.0
-FOLD_SECONDS = 4.0
+SHOWDOWN_SECONDS = 7.0  # long enough to read both hands and the board
+FOLD_SECONDS = 5.0      # counts down 5, 4, 3, 2, 1
 
 RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
 SUITS = ["♠", "♥", "♦", "♣"]
@@ -88,6 +88,46 @@ def best_hand(cards):
 
 def hand_name(score):
     return HAND_NAMES[score[0]]
+
+
+FULL_DECK = [{"r": rank, "s": suit} for rank in RANKS for suit in SUITS]
+EQUITY_SAMPLES = 900  # about a point of error, and only paid once per street
+
+
+def equity(hole, board):
+    """Chance these two cards end up winning, and the chance of a tie.
+
+    Worked out from *only* what this player can already see - their own two
+    cards and the shared board. The opponent's real hand is deliberately left
+    in the pool of unknown cards, because a number calculated against their
+    actual holding would itself give away what they have.
+
+    With every card out the maths is exact; before that it is estimated by
+    dealing out random finishes, so treat it as a guide rather than gospel.
+    """
+    seen = {(c["r"], c["s"]) for c in hole + board}
+    rest = [c for c in FULL_DECK if (c["r"], c["s"]) not in seen]
+    still_to_come = 5 - len(board)
+    wins = ties = total = 0
+
+    if still_to_come == 0:
+        mine = best_hand(hole + board)
+        for pair in combinations(rest, 2):
+            theirs = best_hand(list(pair) + board)
+            total += 1
+            wins += mine > theirs
+            ties += mine == theirs
+    else:
+        for _ in range(EQUITY_SAMPLES):
+            drawn = random.sample(rest, 2 + still_to_come)
+            finished = board + drawn[2:]
+            mine = best_hand(hole + finished)
+            theirs = best_hand(drawn[:2] + finished)
+            total += 1
+            wins += mine > theirs
+            ties += mine == theirs
+
+    return wins / total, ties / total
 
 
 # --- setting up ------------------------------------------------------------
@@ -150,7 +190,14 @@ def _start_hand(state):
     state["lastRaise"] = big
     state["turn"] = button                 # and acts first before the flop
     state["says"] = f"Blinds {small}/{big}. Good luck."
+    _refresh_odds(state)
     _skip_if_cannot_act(state)
+
+
+def _refresh_odds(state):
+    """Recalculate both players' chances. Only ever called when a card lands,
+    so the cost is paid once a street rather than on every screen refresh."""
+    state["odds"] = [equity(state["holes"][p], state["board"]) for p in (0, 1)]
 
 
 def _skip_if_cannot_act(state):
@@ -290,12 +337,15 @@ def _end_street(state):
     # if nobody can bet any more, run the rest of the board out and show
     if all(state["allIn"][p] or state["stacks"][p] == 0 for p in _live(state)) or \
             sum(1 for p in _live(state) if not state["allIn"][p]) < 2:
+        # nobody can bet again, so run the board out without recalculating
+        # odds for streets that will never be shown on their own
         while state["street"] != "river":
             _deal_next(state, order)
         _showdown(state)
         return
 
     _deal_next(state, order)
+    _refresh_odds(state)
     state["acted"] = []
     state["lastRaise"] = _blinds(state)[1]
     first = 1 - state["button"]        # out of position acts first after the flop
@@ -380,7 +430,17 @@ def view(state, player):
     small, big = _blinds(state)
     yours = state["turn"] == player and not state["result"] and not finished
 
+    win, tie = state.get("odds", [(0, 0), (0, 0)])[player]
+    # what they're actually holding right now, once there's enough to name
+    made = (hand_name(best_hand(state["holes"][player] + state["board"]))
+            if len(state["board"]) >= 3 else None)
+
     return {
+        "winChance": round(win * 100),
+        "tieChance": round(tie * 100),
+        "exactOdds": len(state["board"]) == 5,
+        "madeHand": made,
+        "nextIn": max(0, round(state["pending"] - time.time(), 1)) if state["result"] else 0,
         "turn": state["turn"], "over": finished, "winner": state["winner"],
         "you": player,
         "stacks": state["stacks"], "pot": state["pot"], "bets": state["bets"],

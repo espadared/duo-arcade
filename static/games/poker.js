@@ -1,6 +1,23 @@
 /* Poker - heads-up Texas Hold'em with a dealer running the table. */
 
+/* The gap between hands is counted down in the page rather than by asking the
+   server every second. The deadline is parked on the element itself, so the
+   constant redrawing of the table can't lose track of it. */
+function pokerTicker() {
+  if (window.__pokerTick) return;
+  window.__pokerTick = setInterval(() => {
+    const el = document.getElementById('pokerCountdown');
+    if (!el) return;
+    const left = Math.ceil((Number(el.dataset.deadline) - Date.now()) / 1000);
+    const shown = left > 0 ? String(left) : '·';
+    if (el.textContent !== shown) el.textContent = shown;
+  }, 120);
+}
+
 (window.GAMES = window.GAMES || {}).poker = {
+  // tells the shell to leave room at the foot of the page for the odds bar
+  bottomBar: true,
+
   status(v, ctx) {
     if (v.over) return null;
     const said = (v.says || '').replace('{p0}', ctx.names[0]).replace('{p1}', ctx.names[1]);
@@ -60,6 +77,9 @@
       `up again in ${v.nextLevelIn} hand${v.nextLevelIn === 1 ? '' : 's'}`));
 
     root.append(wrap);
+    // pinned to the bottom of the screen so a new player can always see how
+    // they're doing without scrolling the table (the shell reserves the space)
+    if (!v.over) root.append(oddsBar());
 
     // ---------- pieces ----------
 
@@ -115,11 +135,80 @@
           v.bets[player] > 0 && h('span', { style: { color: 'var(--warn)' } }, 'bet ' + money(v.bets[player]))));
     }
 
+    function countdown() {
+      // one deadline per hand, so a redraw mid-count doesn't restart it
+      if (ctx.ui.countdownHand !== v.hand) {
+        ctx.ui.countdownHand = v.hand;
+        ctx.ui.deadline = Date.now() + v.nextIn * 1000;
+      }
+      pokerTicker();
+      return h('div', {
+        style: {
+          marginTop: '14px', padding: '14px', borderRadius: '14px', textAlign: 'center',
+          background: 'var(--panel)', border: '1px solid var(--line)',
+        },
+      },
+        h('div', { class: 'small muted' }, 'Next hand in'),
+        h('div', {
+          id: 'pokerCountdown', 'data-deadline': String(ctx.ui.deadline),
+          style: {
+            fontSize: '2.4rem', fontWeight: '800', lineHeight: '1.1',
+            color: 'var(--accent-2)', fontVariantNumeric: 'tabular-nums',
+          },
+        }, String(Math.max(1, Math.ceil(v.nextIn)))),
+        h('div', { class: 'small muted' }, 'Nothing to press — the dealer is shuffling'));
+    }
+
+    function oddsBar() {
+      const win = v.winChance;
+      // wording matters more than the number for anyone new to poker
+      const verdict = win >= 75 ? ['Very strong', 'var(--mint)']
+        : win >= 55 ? ['Strong', 'var(--mint)']
+          : win >= 42 ? ['About even', 'var(--warn)']
+            : win >= 25 ? ['Weak', '#ff9d5c'] : ['Very weak', 'var(--p0)'];
+
+      return h('div', {
+        style: {
+          position: 'fixed', left: '0', right: '0', bottom: '0', zIndex: '20',
+          padding: '10px 16px calc(10px + env(safe-area-inset-bottom))',
+          background: 'rgba(12,14,26,.93)', backdropFilter: 'blur(10px)',
+          borderTop: '1px solid var(--line)',
+        },
+      },
+        h('div', { style: { maxWidth: '440px', margin: '0 auto' } },
+          h('div', {
+            style: {
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              gap: '8px', marginBottom: '6px',
+            },
+          },
+            h('span', { class: 'small muted' },
+              v.madeHand ? `You have ${v.madeHand.toLowerCase()}` : 'Your two cards'),
+            h('span', { style: { fontWeight: '700', color: verdict[1] } },
+              `${win}% · ${verdict[0]}`)),
+          h('div', {
+            style: {
+              height: '10px', borderRadius: '999px', overflow: 'hidden',
+              background: 'rgba(255,255,255,.08)',
+            },
+          },
+            h('div', {
+              style: {
+                width: `${win}%`, height: '100%', borderRadius: '999px',
+                background: verdict[1], transition: 'width .45s ease',
+              },
+            })),
+          h('div', { class: 'muted', style: { marginTop: '5px', fontSize: '.7rem' } },
+            v.exactOdds
+              ? 'Exact chance of winning, now every card is out'
+              : 'Rough chance of winning against an unknown hand')));
+    }
+
     function actions() {
       const box = h('div', { style: { marginTop: '14px' } });
+      if (v.result) return countdown();
       if (!v.yourTurn) {
-        return h('div', { class: 'hint', style: { marginTop: '14px' } },
-          v.result ? 'Next hand shortly…' : 'Waiting for them…');
+        return h('div', { class: 'hint', style: { marginTop: '14px' } }, 'Waiting for them…');
       }
 
       box.append(h('div', { class: 'btn-row' },

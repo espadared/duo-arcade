@@ -37,6 +37,16 @@ come out right. Chip conservation is asserted after every single action in the
 test suite — chips can never be created or lost, including when an uncalled
 raise has to be returned.
 
+A bar pinned to the bottom of the screen shows your chance of winning and names
+what you're currently holding, so a new player can tell a strong hand from a
+weak one. **It is worked out only from the cards that player can already see** —
+their own two plus the board — treating the opponent's hand as unknown. That
+matters: a number calculated against their real cards would itself give away
+what they have. The two players' percentages therefore don't add up to 100, and
+that is correct. With every card out the maths is exact; before that it's
+estimated from 900 random finishes, so it's a guide rather than gospel. It's
+recalculated once per street rather than on every screen refresh.
+
 **Bridges** is Hex: claim cells on a rhombus of hexagons and join your two
 opposite edges. Because the two goals cross, exactly one player always connects
 — it cannot end in a draw.
