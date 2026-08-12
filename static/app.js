@@ -78,12 +78,17 @@
 
   function applyView(data) {
     if (!data || !data.v) return;
+    // The long poll gives up after a while and hands back an unchanged room.
+    // Redrawing then would rebuild the whole screen for nothing - and a button
+    // destroyed between finger-down and finger-up never fires its click, which
+    // shows up as "I had to press it twice".
+    const somethingChanged = data.v !== S.lastV || S.screen !== 'room';
     S.view = data;
     S.lastV = data.v;
     S.screen = 'room';
     const key = data.game + '#' + data.round;
     if (key !== S.uiKey) { S.uiKey = key; S.ui = {}; }  // fresh game, fresh scratch space
-    render();
+    if (somethingChanged) render();
   }
 
   function endSession(message) {
@@ -445,9 +450,14 @@
   }
 
   async function sendMove(move) {
+    const before = S.lastV;
     const res = await api('/api/move', { move });
     if (res.data && res.data.error) toast(res.data.error);
     if (res.data && res.data.v) applyView(res.data);
+    // A rejected move (or a dropped connection) leaves the room exactly as it
+    // was, so nothing above redraws - and a game that greys its buttons out on
+    // tap would be stuck that way. Put the controls back.
+    if (S.lastV === before) render();
   }
 
   async function pickGame(key) {

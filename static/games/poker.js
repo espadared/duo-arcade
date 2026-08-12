@@ -170,6 +170,9 @@ function pokerTicker() {
       return h('div', {
         style: {
           position: 'fixed', left: '0', right: '0', bottom: '0', zIndex: '20',
+          // nothing in here is tappable, and it can sit over the action
+          // buttons on a tall screen - so let taps fall straight through it
+          pointerEvents: 'none',
           padding: '10px 16px calc(10px + env(safe-area-inset-bottom))',
           background: 'rgba(12,14,26,.93)', backdropFilter: 'blur(10px)',
           borderTop: '1px solid var(--line)',
@@ -205,18 +208,26 @@ function pokerTicker() {
     }
 
     function actions() {
-      const box = h('div', { style: { marginTop: '14px' } });
+      const box = h('div', { class: 'poker-actions', style: { marginTop: '14px' } });
       if (v.result) return countdown();
       if (!v.yourTurn) {
         return h('div', { class: 'hint', style: { marginTop: '14px' } }, 'Waiting for them…');
       }
 
+      // Grey the row out the instant it's tapped. Dealing the next street takes
+      // a moment, and without this the table looks unchanged for long enough
+      // that people press again and get an error for their trouble.
+      const play = (move) => () => {
+        box.querySelectorAll('.btn').forEach((b) => { b.disabled = true; });
+        ctx.send(move);
+      };
+
       box.append(h('div', { class: 'btn-row' },
-        h('button', { class: 'btn', onclick: () => ctx.send({ action: 'fold' }) }, '🏳️ Fold'),
+        h('button', { class: 'btn', onclick: play({ action: 'fold' }) }, '🏳️ Fold'),
         v.canCheck
-          ? h('button', { class: 'btn primary', onclick: () => ctx.send({ action: 'check' }) }, '✓ Check')
+          ? h('button', { class: 'btn primary', onclick: play({ action: 'check' }) }, '✓ Check')
           : h('button', {
-            class: 'btn primary', onclick: () => ctx.send({ action: 'call' }),
+            class: 'btn primary', onclick: play({ action: 'call' }),
           }, `Call ${money(v.toCall)}`)));
 
       // raise sizes worth offering, skipping any that collide or don't fit
@@ -242,7 +253,7 @@ function pokerTicker() {
             class: 'btn small',
             // share one row rather than wrapping the last one onto its own line
             style: { flex: '1 1 0', minWidth: '0', padding: '9px 6px' },
-            onclick: () => ctx.send({ action: 'raise', to }),
+            onclick: play({ action: 'raise', to }),
           }, h('span', {},
             label, h('br'),
             h('span', { class: 'muted', style: { fontSize: '.76rem' } }, money(to)))))));
