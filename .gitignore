@@ -1,2 +1,8 @@
 __pycache__/
 .DS_Store
+
+# built by mobile/build-web.sh and npm
+mobile/www/
+mobile/node_modules/
+mobile/ios/
+mobile/android/

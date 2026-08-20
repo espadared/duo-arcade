@@ -5,6 +5,12 @@
   const $app = document.getElementById('app');
   const $toast = document.getElementById('toast');
 
+  // On the website the pages and the games server are the same place, so plain
+  // paths work. Inside a phone app the pages come from the app itself, so every
+  // request has to be aimed at the server explicitly.
+  const HOME = 'https://duo-arcade.onrender.com';
+  const API = (window.Capacitor || location.protocol === 'file:') ? HOME : '';
+
   const S = {
     screen: 'home',
     catalog: [],
@@ -44,7 +50,7 @@
     const payload = Object.assign(
       { room: S.room, player: S.player, token: S.token }, body || {});
     try {
-      const res = await fetch(path, {
+      const res = await fetch(API + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -63,7 +69,7 @@
     while (mine === pollId && S.room) {
       let res;
       try {
-        res = await fetch(`/api/state?room=${S.room}&player=${S.player}&v=${S.lastV}`);
+        res = await fetch(`${API}/api/state?room=${S.room}&player=${S.player}&v=${S.lastV}`);
       } catch (err) {
         await sleep(1500);
         continue;
@@ -111,7 +117,10 @@
   }
 
   function inviteLink() {
-    return `${location.origin}/?room=${S.room}`;
+    // Always hand out the website address: inside a phone app location.origin
+    // is the app's own internal one, which would be useless to the friend, and
+    // this way they can join from a browser whether or not they have the app.
+    return `${API || location.origin}/?room=${S.room}`;
   }
 
   async function copyText(text) {
@@ -498,7 +507,7 @@
 
   async function init() {
     try {
-      const res = await fetch('/api/games');
+      const res = await fetch(API + '/api/games');
       S.catalog = (await res.json()).games;
     } catch (err) {
       $app.replaceChildren(h('div', { class: 'boot' }, 'Could not reach the arcade. Try refreshing.'));

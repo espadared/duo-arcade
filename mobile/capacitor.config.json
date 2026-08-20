@@ -1,0 +1,29 @@
+{
+  "appId": "com.espadared.duoarcade",
+  "appName": "Duo Arcade",
+  "webDir": "www",
+  "backgroundColor": "#0b0d17",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0b0d17"
+  },
+  "android": {
+    "backgroundColor": "#0b0d17",
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 800,
+      "backgroundColor": "#0b0d17",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0b0d17"
+    }
+  }
+}

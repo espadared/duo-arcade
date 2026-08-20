@@ -161,12 +161,29 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             self.close_connection = True
 
+    def cors(self):
+        """A phone app carries its own copy of the pages, so its requests reach
+        us from a different origin and the browser needs permission to read the
+        reply. Nothing here relies on cookies - every request carries its own
+        token - so opening this up costs nothing."""
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.cors()
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def send_json(self, payload, status=200):
         body = json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.cors()
         self.end_headers()
         self.write_body(body)
 
@@ -177,6 +194,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": "not found"}, 404)
             return
         ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        if path.suffix == ".webmanifest":
+            ctype = "application/manifest+json"
         if ctype.startswith("text/") or ctype in ("application/javascript",):
             ctype += "; charset=utf-8"
         self.send_response(status)
@@ -222,6 +241,12 @@ class Handler(BaseHTTPRequestHandler):
             self.handle_state(parse_qs(parsed.query))
         elif path in ("/", "/index.html"):
             self.send_file(STATIC / "index.html")
+        elif path == "/sw.js":
+            # has to be served from the root, or it is only allowed to look
+            # after /static/ and the rest of the site goes uncached
+            self.send_file(STATIC / "sw.js")
+        elif path == "/manifest.webmanifest":
+            self.send_file(STATIC / "manifest.webmanifest")
         elif path.startswith("/static/"):
             target = (STATIC / path[len("/static/"):]).resolve()
             if STATIC.resolve() in target.parents and target.is_file():

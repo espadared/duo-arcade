@@ -7,6 +7,15 @@
 <meta name="description" content="A pile of two-player games. Pick one, share the link, play together on your own phones.">
 <title>Duo Arcade — games for two</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎮</text></svg>">
+
+<!-- so it can be kept on a phone's home screen and open without browser chrome -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Duo Arcade">
+
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -27,5 +36,11 @@
 <script src="/static/games/poker.js"></script>
 <script src="/static/games/xiangqi.js"></script>
 <script src="/static/app.js"></script>
+<script>
+  // Only on the website: inside a phone app the files are already on the device.
+  if ('serviceWorker' in navigator && !window.Capacitor) {
+    addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  }
+</script>
 </body>
 </html>
