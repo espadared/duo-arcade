@@ -26,6 +26,66 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const gameByKey = (key) => S.catalog.find((g) => g.key === key) || { name: 'Game', emoji: '🎮' };
 
+  // ---------- keeping it on the home screen ----------
+
+  let installOffer = null;   // Android hands us one of these to trigger later
+  const onHomeScreen = () =>
+    matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isTouch = () => matchMedia('(pointer: coarse)').matches;
+  const isApple = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    installOffer = event;
+    if (S.screen === 'home') render();
+  });
+
+  function installHint() {
+    if (onHomeScreen() || !isTouch()) return null;
+    if (localStorage.getItem('duoarcade.hideinstall') === 'yes') return null;
+    if (!installOffer && !isApple()) return null;   // nothing useful to suggest
+
+    const dismiss = () => {
+      localStorage.setItem('duoarcade.hideinstall', 'yes');
+      render();
+    };
+    return h('div', {
+      class: 'panel',
+      style: {
+        display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px',
+        padding: '14px 16px',
+      },
+    },
+      h('span', { style: { fontSize: '1.5rem' } }, '📲'),
+      h('div', { style: { flex: '1', minWidth: '0' } },
+        h('div', { style: { fontWeight: '650', fontSize: '.95rem' } }, 'Keep it on your phone'),
+        h('div', { class: 'small muted' }, installOffer
+          ? 'Add Duo Arcade to your home screen — it opens full screen, like an app.'
+          : 'Tap the Share button below, then “Add to Home Screen”.')),
+      installOffer && h('button', {
+        class: 'btn small primary',
+        onclick: async () => {
+          const offer = installOffer;
+          installOffer = null;
+          offer.prompt();
+          await offer.userChoice.catch(() => {});
+          render();
+        },
+      }, 'Add'),
+      h('button', {
+        class: 'btn small ghost', style: { padding: '6px 10px' },
+        'aria-label': 'No thanks', onclick: dismiss,
+      }, '✕'));
+  }
+
+  // A short buzz the moment it becomes your turn, so a phone in a pocket or
+  // face down still tells you. Android only - Safari has no equivalent.
+  function buzzOnYourTurn(before, after) {
+    if (!navigator.vibrate) return;
+    const yours = (v) => !!(v && v.state && !v.state.over && v.state.turn === v.you);
+    if (yours(after) && !yours(before)) navigator.vibrate(18);
+  }
+
   // ---------- remembering who you are ----------
 
   const store = {
@@ -89,6 +149,7 @@
     // destroyed between finger-down and finger-up never fires its click, which
     // shows up as "I had to press it twice".
     const somethingChanged = data.v !== S.lastV || S.screen !== 'room';
+    if (somethingChanged) buzzOnYourTurn(S.view, data);
     S.view = data;
     S.lastV = data.v;
     S.screen = 'room';
@@ -163,6 +224,7 @@
 
   function homeScreen() {
     return h('div', { class: 'wrap' },
+      installHint(),
       h('div', { class: 'hero' },
         h('div', { class: 'logo' }, '🎮'),
         h('h1', {}, 'Duo Arcade'),

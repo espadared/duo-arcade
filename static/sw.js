@@ -2,7 +2,10 @@
    a bad signal. Only the pages and artwork are stored - never the game itself,
    which always has to come fresh from the server. */
 
-const CACHE = 'duo-arcade-shell-v1';
+// Bump this whenever the pages change and you want phones to pick it up on the
+// very next launch. Forgetting is not fatal - the copy below is refreshed in
+// the background either way, so it would just arrive one launch later.
+const CACHE = 'duo-arcade-shell-v2';
 
 const SHELL = [
   '/',

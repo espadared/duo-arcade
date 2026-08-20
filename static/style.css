@@ -20,6 +20,18 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* The giveaway that something is a web page rather than an app is how it
+   answers a finger: text gets selected, a long press pops up a menu, a quick
+   double tap zooms the board. Turn all of that off for the game surfaces, and
+   put it back wherever there is genuinely text to select or copy. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, code, .rules, .feed { -webkit-user-select: text; user-select: text; }
+button, .cell, .game-card { touch-action: manipulation; }
+
 html, body {
   margin: 0;
   min-height: 100%;
@@ -40,12 +52,34 @@ body {
 
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
 input { font: inherit; }
-.boot { padding: 80px 20px; text-align: center; color: var(--muted); }
+/* what fills the screen for the moment between tapping the icon and the
+   arcade appearing - a blank page there is what makes a home-screen app feel
+   like a bookmark */
+.boot {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  text-align: center; color: var(--muted); padding: 20px;
+}
+.boot .mark { display: flex; align-items: center; }
+.boot .mark i {
+  display: block; width: 54px; height: 54px; border-radius: 50%;
+  animation: bob 1.6s ease-in-out infinite;
+}
+.boot .mark i:first-child { background: var(--p0); }
+.boot .mark i:last-child { background: var(--p1); margin-left: -18px; animation-delay: .25s; }
+.boot h1 {
+  font-size: 1.5rem; letter-spacing: -.02em;
+  background: linear-gradient(100deg, #fff 10%, var(--accent-2) 60%, var(--accent) 95%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
 
-/* the top padding also clears the notch when kept on a home screen */
+/* the padding also clears the notch and the home indicator when the arcade is
+   kept on a home screen and runs without any browser chrome */
 .wrap {
   max-width: 720px; margin: 0 auto;
-  padding: calc(20px + env(safe-area-inset-top)) 16px 48px;
+  padding: calc(20px + env(safe-area-inset-top)) 16px
+           calc(48px + env(safe-area-inset-bottom));
 }
 /* clearance for a game that pins a bar to the bottom of the screen */
 .wrap.has-bottom-bar { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
