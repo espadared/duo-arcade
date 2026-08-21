@@ -497,12 +497,19 @@ def get_lan_ip():
         return "localhost"
 
 
+def report_storage():
+    """Say whether the history is being saved - from a side thread, because the
+    database is allowed to be asleep too and nobody should wait behind it."""
+    saving, detail = owner.storage_check()
+    print(f"  History: {'saved to database' if saving else 'MEMORY ONLY'} — {detail}", flush=True)
+
+
 if __name__ == "__main__":
     threading.Thread(target=janitor, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    saving, detail = owner.storage_check()
-    print(f"Two Player Arcade is running with {len(CATALOG)} games!")
-    print(f"  History: {'saved to database' if saving else 'MEMORY ONLY'} — {detail}")
-    print(f"  On this computer:  http://localhost:{PORT}")
-    print(f"  On another device (same WiFi):  http://{get_lan_ip()}:{PORT}")
+    print(f"Two Player Arcade is running with {len(CATALOG)} games!", flush=True)
+    print(f"  On this computer:  http://localhost:{PORT}", flush=True)
+    print(f"  On another device (same WiFi):  http://{get_lan_ip()}:{PORT}", flush=True)
+    # start answering straight away; the database check catches up behind us
+    threading.Thread(target=report_storage, daemon=True).start()
     server.serve_forever()
